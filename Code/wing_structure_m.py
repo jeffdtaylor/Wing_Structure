@@ -14,15 +14,8 @@ import math as ma
 import json
 from collections import OrderedDict
 import time
-
-#User-defined module containing integrator routines
 import integrators as ints
-
-#User-defined module containing functions for the following distributions:
-#-Non-Structural Weight
-#-Thickness-to-chord ratio
-#-Chord Distribution
-import user_functions as uf
+import dist_functions as df
 
 class Domain(object):
 	_slots_=['wing','spar','M','W','n','f','L','D_i']
@@ -129,7 +122,7 @@ class Domain(object):
 		#initialize distributions according to specification in input file
 		self.wing.c,self.wing.c_type=distributions_init(filename,data["wing"]["chord"],self.wing.m)	
 		self.wing.t_c,self.wing.t_c_type=distributions_init(filename,data["wing"]["thickness_chord"],self.wing.m)
-		self.W.ntilde,self.W.ns_type=distributions_init(filename,data["weight"]["nonstructural_distribution"],self.wing.m)
+		self.W.ntilde,self.W.ns_dist_type=distributions_init(filename,data["weight"]["nonstructural_distribution"],self.wing.m)
 		self.spar.h,self.spar.h_type=distributions_init(filename,data["spar"]["height"],self.wing.m)
 		
 		#initialize weight
@@ -383,9 +376,9 @@ class Domain(object):
 		wing,spar,M,W,n,f,L=self.unpackplane()
 		
 		#Non-Structural Weight Distribution
-		if (W.ns_type=='function') :
-			W.ntilde,W.n=uf.nonstruct_dist(self)
-		else :
+		if ((W.ns_dist_type=='function') or (W.ns_dist_type=='even')):  
+			W.ntilde,W.n=df.nonstruct_dist(self)
+		else:
 			W.ntilde=W.ntilde
 		#Total Non-structural Weight Eq. (38)	
 		ft=np.zeros((wing.m+1,), dtype=np.float64)
@@ -419,7 +412,7 @@ class Domain(object):
 			#	-t_c_type=either 'function' or 'file'
 			#----------------------------------------------------------------------
 			if (self.t_c_type=='function'):
-				self.t_c=uf.t_c(self.m)	
+				self.t_c=df.t_c(self.m)	
 
 		def wing_area(self) :
 			#######################################################################
@@ -504,7 +497,7 @@ class Domain(object):
 			#new chord to maintain constant wing area
 			
 			if (self.c_type=='function'):
-				self.c=uf.chord(self)	
+				self.c=df.chord(self)	
 			
 					
 	#Holds the spar geometry information	
@@ -680,7 +673,7 @@ class Domain(object):
 			#new height
 			
 			if (self.h_type=='function'):
-				self.h=uf.height(wing)
+				self.h=df.height(wing)
 			
 			#If height is specified in a file, scale the height
 			else:
@@ -695,7 +688,7 @@ class Domain(object):
 
 	#Holds the weight information			
 	class Weight(object):
-		_slots_=['tot','r','n','n_type','s','R_n','r_type','ntilde','stilde','ns_type']
+		_slots_=['tot','r','n','n_type','s','R_n','r_type','ntilde','stilde','ns_dist_type']
 		
 		def init_weight(self,data):
 			#######################################################################
@@ -879,16 +872,15 @@ def distributions_init(input_file,input_file_entry,n) :
 		
 		#If from function, initialize distribution to zero and set type 
 		#to 'function'
-		if (init_var=='function'):
+		if ((init_var=='function') or (init_var=='even')):
+			init_var_type=init_var
 			init_var=np.zeros((n+1,), dtype=np.float64)
-			init_var_type='function'
-			
+
 		#Anything else is interpreted as a file name containing the 
 		#distribution
 		else :
 			filename=init_var
-			
-			init_var_type=check_file(filename)
+			init_var,init_var_type=file_dist(filename)
 			
 	#If neither function nor file is specified, set distribution constant
 	#value and print notification
@@ -964,13 +956,13 @@ def set_constant_dist(input_file_entry,n):
 	return init_var,init_var_type
 
 
-def check_file(filename):
+def file_dist(filename):
 #######################################################################
 #####                                                             #####
-#####                     check_file Function                     #####
+#####                     file_dist Function                      #####
 #####                                                             #####
 #######################################################################	
-#check_file checks for correct distribution file entry format
+#file_dist checks for correct distribution file entry format
 #----------------------------------------------------------------------
 #inputs:
 #	-filename=name of distribution input file
@@ -993,7 +985,5 @@ def check_file(filename):
 		sys.exit('File read error! "'+filename+'" is invalid distribution filename. Please specify distribution file in .json format')
 		exit
 
-	return init_var_type
-	
-	
+	return init_var,init_var_type
 

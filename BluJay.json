@@ -1,7 +1,7 @@
 {
     "wing" : {
         "wing_area" : 0.677262,
-        "wing_span" : 3.10896,
+        "wing_span" : 3.10,
         "chord" : "function",
         "thickness_chord" : "function",
         "grid" : 100

@@ -1,0 +1,53 @@
+{
+    "wing": {
+        "wing_area": 200.0000000000171,
+        "wing_span": 98.64848290361117,
+        "chord": {
+            "function": "rectangular"
+        },
+        "thickness_chord": {
+            "constant": "0.12"
+        },
+        "loading": 15.0,
+        "grid": 100
+    },
+    "spar": {
+        "C_sigma": 0.165,
+        "max_stress": 3600000.0,
+        "height": {
+            "constant": 0.3649265079
+        },
+        "specific_weight": 172.8,
+        "beam_type": "rectangular"
+    },
+    "limits": {
+        "maneuvering": 3.75,
+        "hard_landing": 3.75
+    },
+    "weight": {
+        "total_weight": 3000.0000000002565,
+        "root_weight": 1100.000000000094,
+        "root_total": 0.36666666667,
+        "nonstructural_weight": 3000.0,
+        "nonstructural_distribution": {
+            "function": "custom"
+        }
+    },
+    "flight": {
+        "density": 0.0023769,
+        "velocity": 200.0
+    },
+    "lift_distribution": {
+        "B": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ]
+    }
+}

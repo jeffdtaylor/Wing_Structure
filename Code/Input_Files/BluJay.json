@@ -1,0 +1,57 @@
+{
+    "wing" : {
+		"loading" : 15.0,
+        "wing_area" : 0.677262,
+        "wing_span" : 3.10896,
+        "chord" : {
+			"function" : "custom",
+			"xfile" : "chord.json",
+			"xconstant" : 0.27
+		},
+        "thickness_chord" : {
+			"function" : "custom",
+			"xfile" : "t_c.json",
+			"xconstant" : 0.27
+		},
+        "grid" : 200
+    },
+    "spar" : {
+		"C_sigma":0.125,
+        "max_stress" : 7.6e6,
+        "xheight" : {
+			"xfunction" : "custom",
+			"xfile" : "height.json",
+			"constant" : 0.02614104
+		},
+        "specific_weight" : 1569.6,
+        "xbeam_type" : {
+			"I":{
+				"flange_width" : 0.0110998,
+				"flange_height" : 0.0033655,
+				"web_width" : 0.003175
+				}
+		}
+    },	
+    "limits" : {
+        "maneuvering" : 2.5,
+        "hard_landing" : 2.5
+    },
+    "weight" : {
+        "xtotal_weight" : 122.0,
+        "root_total" : 0.25,
+        "root_weight" : 36.6,
+		"nonstructural_weight" : 84.0,
+        "nonstructural_distribution" : {
+			"xfunction" : "custom",
+			"file" : "Distribution_Files/even_ns.json",
+			"xconstant" : 27.0
+		}
+    },
+    "flight" : {
+        "density" : 1.223,
+        "velocity" : 19.0
+    },
+    "lift_distribution" : {
+		"B" : [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
+    }
+}

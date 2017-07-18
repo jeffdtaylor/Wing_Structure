@@ -1,0 +1,19 @@
+{
+    "settings" : {
+        "default_alpha" : 1.0,
+        "stop_delta" : 1.0E-10,
+        "n_search" : 4,
+        "line_search_type" : "quadratic",
+        "verbose" : true,
+        "alpha_tol" : 0.1,
+        "max_refinements" : 100,
+        "rsq_tol" : 0.99,
+        "max_alpha_factor" : 100
+    },
+    "variables" : {
+        "chord0" : { "init" : 1.0, "opt" : "on" },
+        "chord1" : { "init" : 1.0, "opt" : "on" },
+        "chord2" : { "init" : 1.0, "opt" : "on" }
+    }
+}
+

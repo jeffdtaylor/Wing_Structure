@@ -2,7 +2,7 @@ import numpy as np
 import math as ma
 
 #Equation 30
-def Eq_30(case):
+def Wns(case):
 	for i in range (0,case.wing.m+1) :
 	#Eq. (23)
 		if (case.W.n_type=='constant'):

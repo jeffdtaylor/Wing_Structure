@@ -25,14 +25,16 @@ filename= sys.argv[-1]
 
 #sets up the data structures   
 start = time.clock() 
-case1=ws.plane_setup(filename)
+#case1=ws.plane_setup(filename)
+case1=ws.Domain(filename,1)
 #~ case2=ws.plane_setup(filename2)
 elapsed = time.clock()-start
+print('-----------------------------------------------------------------------------------------------------')
 print(' ')
 print( 'Setup Time: ',elapsed)
 #Solver computes structural weight
 start=time.clock()
-case=ws.solver(case1,1e-9)
+case1.solver(1e-16)
 #~ case=ws.solver(case2,1e-9)
 elapsed = time.clock()-start
 print( 'Solver Time: ',elapsed)
@@ -45,8 +47,8 @@ print(results.format('Non-Structural Weight:',case1.W.n,'[N]'))
 print(results.format('Total Weight:',case1.W.tot,'[N]'))
 print(results.format('S_b:',case1.spar.S_b[0],'[m^2]'))
 print(results.format('b:',case1.wing.b,'[m]'))
-print(results.format('W/S:',case1.W.tot/case.wing.S,'[m^2]'))
-print(results.format('R_n:',case1.W.r/case.W.tot,' '))
+print(results.format('W/S:',case1.W.tot/case1.wing.S,'[m^2]'))
+print(results.format('R_n:',case1.W.r/case1.W.tot,' '))
 print(results.format('S:',case1.wing.S,'[m^2]'))
 #~ print('----------------------------------------------------------------')
 #~ print(results.format('Induced Drag:',case2.D_i,'[N]'))
@@ -72,7 +74,7 @@ print(results.format('S:',case1.wing.S,'[m^2]'))
 
 
 plt.figure(1)
-plt.plot(case.wing.z,case.L.ratio,'k')
+plt.plot(case1.wing.z,case1.L.ratio,'k')
 plt.ylabel('Structural Weight Dist [N/m]')
 plt.xlabel('Span [m]')
 ax=plt.gca()
@@ -82,7 +84,7 @@ ax.set_xlim([0.0,2.0])
 #~ plt.show()
 
 plt.figure(2)
-plt.plot(case.wing.z,case.W.ntilde,'k')
+plt.plot(case1.wing.z,case1.W.ntilde,'k')
 plt.ylabel('NS Weight Dist [N/m]')
 plt.xlabel('Span [m]')
 ax=plt.gca()

@@ -1,0 +1,42 @@
+{
+    "wing": {
+        "wing_area": 300.0,
+        "wing_span": 120.7362149,
+        "chord": "function",
+        "thickness_chord": "function",
+        "grid": 100
+    },
+    "spar": {
+        "max_stress": 3600000.0,
+        "height": 0.3649265079,
+        "specific_weight": 172.8,
+        "beam_type": "rectangular"
+    },
+    "limits": {
+        "maneuvering": 2.5,
+        "hard_landing": 2.5
+    },
+    "weight": {
+		"structural_weight": 1500.0,
+        "total_weight": 4500.0,
+        "root_weight": 1350.0,
+        "nonstructural_distribution": "function"
+    },
+    "flight": {
+        "density": 0.0023769,
+        "velocity": 200.0
+    },
+    "lift_distribution": {
+        "B": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ]
+    }
+}

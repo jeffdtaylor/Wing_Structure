@@ -20,7 +20,7 @@ import dist_functions as df
 class Domain(object):
 	_slots_=['wing','spar','M','W','n','f','L','D_i']
 	
-	def __init__(self,filename):
+	def __init__(self,filename,comment_flag=0):
 
 		self.wing=self.Wing()
 		self.spar=self.Spar()
@@ -31,7 +31,7 @@ class Domain(object):
 		self.L=self.Lift_Distribution()
 		
 		#initialize data_structure
-		self.init(filename)
+		self.init(filename,comment_flag)
 
 		#discretize wing
 		self.wing.discretize()	
@@ -99,7 +99,7 @@ class Domain(object):
 		self.f=f
 		self.L=L
 					
-	def init(self,filename):
+	def init(self,filename,comment_flag):
 		#######################################################################
 		#####                                                             #####
 		#####                       Init Function                         #####
@@ -115,25 +115,46 @@ class Domain(object):
 		#----------------------------------------------------------------------
 		with open(filename) as file:
 			data = json.load(file, object_pairs_hook = OrderedDict)
+			
+		#Initialize distribution types to 'null'
+		self.type_init()
+		
+		#initialize distributions according to specification in input file
+		self.wing.c,self.wing.c_type=distributions_init(data,'wing','chord',comment_flag)	
+		self.wing.t_c,self.wing.t_c_type=distributions_init(data,'wing','thickness_chord',comment_flag)
+		self.W.ntilde,self.W.ns_dist_type=distributions_init(data,'weight','nonstructural_distribution',comment_flag)
 		
 		#Initialize data from file
 		self.file_values(data)
-		
-		#initialize distributions according to specification in input file
-		self.wing.c,self.wing.c_type=distributions_init(filename,data["wing"]["chord"],self.wing.m)	
-		self.wing.t_c,self.wing.t_c_type=distributions_init(filename,data["wing"]["thickness_chord"],self.wing.m)
-		self.W.ntilde,self.W.ns_dist_type=distributions_init(filename,data["weight"]["nonstructural_distribution"],self.wing.m)
-		self.spar.h,self.spar.h_type=distributions_init(filename,data["spar"]["height"],self.wing.m)
 		
 		#initialize weight
 		self.W.init_weight(data)
 		
 		#initialize beam
-		self.spar.init_beam(data)
+		self.spar.init_beam(data,comment_flag)
 		
 		#set remaining values to zero
 		self.init_zeros()
 
+	def type_init(self):
+		#######################################################################
+		#####                                                             #####
+		#####                    type_init Function                       #####
+		#####                                                             #####
+		#######################################################################
+		#type_init function initializes distribution types to 'null'
+		#----------------------------------------------------------------------
+		#inputs:
+		#	-filename=file containing aircraft geometry
+		#	-plane=data structure containing problem scenario
+		#outputs:
+		#	-
+		#----------------------------------------------------------------------
+		self.wing.c_type='null'
+		self.wing.t_c_type='null'
+		self.spar.h_type='null'
+		self.W.ns_type='null'
+		
 	def file_values(self,data):
 		#######################################################################
 		#####                                                             #####
@@ -148,23 +169,41 @@ class Domain(object):
 		#outputs:
 		#	-
 		#----------------------------------------------------------------------
-
+		
 		self.wing.m=data["wing"]["grid"]
 		self.wing.S=data["wing"]["wing_area"]
 		self.wing.b=data["wing"]["wing_span"]
 		self.spar.sigma_max=data["spar"]["max_stress"]
-		self.spar.gam=data["spar"]["specific_weight"]
+		self.spar.gam=data["spar"]["specific_weight"]		
 		self.n.m=data["limits"]["maneuvering"]
 		self.n.g=data["limits"]["hard_landing"]
 		self.f.rho=data["flight"]["density"]
 		self.f.V=data["flight"]["velocity"]
 		self.L.B=data["lift_distribution"]["B"]
-		self.spar.beam_type=data["spar"]["beam_type"]
+		if ('C_sigma' in data["spar"]):
+			self.spar.C_sigma=np.zeros((self.wing.m+1,), dtype=np.float128)
+			self.spar.beam_type='C_sigma'
+			for i in range (0,self.wing.m+1):
+				self.spar.C_sigma[i]=data["spar"]["C_sigma"]
+		else :
+			self.spar.C_sigma=np.zeros((self.wing.m+1,), dtype=np.float128)
+			if isinstance(data["spar"]["beam_type"],str):
+				self.spar.beam_type=data["spar"]["beam_type"]
+			else:
+				for key in data["spar"]["beam_type"]:
+					self.spar.beam_type=key
+
 		self.W.init_weight(data)
 		if 'loading' in data["wing"]:
 			self.wing.loading=data["wing"]["loading"]	
 		else:
 			self.wing.loading=self.W.tot/self.wing.S
+		if (self.wing.c_type=='taper'):
+			self.wing.taper_ratio=data["wing"]["chord"]["function"]["taper"]
+			
+		if (self.wing.t_c_type=='root/tip'):
+			self.wing.root_tc=data["wing"]["thickness_chord"]["function"]["root/tip"]["root"]
+			self.wing.tip_tc=data["wing"]["thickness_chord"]["function"]["root/tip"]["tip"]
 
 	def init_zeros(self):
 		#######################################################################
@@ -181,18 +220,17 @@ class Domain(object):
 		#	-
 		#----------------------------------------------------------------------
 
-		self.wing.t_max=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.wing.theta=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.wing.z=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.spar.C_sigma=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.spar.S_b=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.M.bnm=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.M.bng=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.M.b=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.W.stilde=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.L.tilde=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.L.ratio=np.zeros((self.wing.m+1,), dtype=np.float64)
-		self.L.nondim=np.zeros((self.wing.m+1,), dtype=np.float64)
+		self.wing.t_max=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.wing.theta=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.wing.z=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.spar.S_b=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.M.bnm=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.M.bng=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.M.b=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.W.stilde=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.L.tilde=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.L.ratio=np.zeros((self.wing.m+1,), dtype=np.float128)
+		self.L.nondim=np.zeros((self.wing.m+1,), dtype=np.float128)
 		self.D_i=0.0	
 			
 	def geom(self):
@@ -277,7 +315,7 @@ class Domain(object):
 		#----------------------------------------------------------------------
 		wing,spar,M,W,n,f,L=self.unpackplane()
 		
-		ft=np.zeros((wing.m+1,), dtype=np.float64)
+		ft=np.zeros((wing.m+1,), dtype=np.float128)
 		
 		#Maneuvering-Flight Bending moment Eq. (40)	
 		for i in range (0,wing.m+1):
@@ -309,7 +347,7 @@ class Domain(object):
 		#--------------------------------------------------------------------
 		wing,spar,M,W,n,f,L=self.unpackplane()
 
-		ft=np.zeros((wing.m+1,), dtype=np.float64)
+		ft=np.zeros((wing.m+1,), dtype=np.float128)
 		
 		#Hard-Landing Bending moment Eq. (41)		
 		for i in range (0,wing.m+1):
@@ -319,10 +357,10 @@ class Domain(object):
 			#simpson's 1/3 rule Eq. (41)
 			if (i != wing.m) :
 				M.bng[i]=-n.g*wing.b/2.0*ints.simpson_third(i,wing.m,wing.theta,ft)
-				M.bng[wing.m-i]=M.bng[i]
+				#M.bng[wing.m-i]=M.bng[i]
 			else :
 				M.bng[i]=0.0
-				M.bng[wing.m-i]=M.bng[i]		
+				#M.bng[wing.m-i]=M.bng[i]		
 				
 		self.packplane(wing,spar,M,W,n,f,L)
 		
@@ -350,7 +388,7 @@ class Domain(object):
 				W.stilde[i]=max(np.absolute(M.bnm[i])/spar.S_b[i],np.absolute(M.bng[i])/spar.S_b[i])
 				#W.stilde[i]=np.absolute(M.bnm[i])/spar.S_b[i]
 		#Total Structural Weight Eq. (42)
-		ft=np.zeros((wing.m+1,), dtype=np.float64)
+		ft=np.zeros((wing.m+1,), dtype=np.float128)
 		for i in range (0,wing.m+1) :
 			ft[i]=W.stilde[i]*ma.sin(wing.theta[i])
 			
@@ -376,12 +414,21 @@ class Domain(object):
 		wing,spar,M,W,n,f,L=self.unpackplane()
 		
 		#Non-Structural Weight Distribution
-		if ((W.ns_dist_type=='function') or (W.ns_dist_type=='even')):  
-			W.ntilde,W.n=df.nonstruct_dist(self)
-		else:
+		if ((W.ns_dist_type=='even') or (W.ns_dist_type=='custom')):
+			df.nonstruct_dist(self)
+		
+		#If height is specified in a file, scale the height
+		elif ((W.ns_dist_type=='constant') or (W.ns_dist_type=='file')):
 			W.ntilde=W.ntilde
+		
+		#~ elif (W.ns_dist_type=='null'):
+			#~ print('WARNING: Non_structural weight distribution set to zero.')	
+				
+		#~ else:
+			#~ print('WARNING: invalid non-structural weight distribution settings. Non-Structural weight distribution defaulted to zero.')	
+			
 		#Total Non-structural Weight Eq. (38)	
-		ft=np.zeros((wing.m+1,), dtype=np.float64)
+		ft=np.zeros((wing.m+1,), dtype=np.float128)
 		for i in range (0,wing.m+1):
 			ft[i]=W.ntilde[i]*ma.sin(wing.theta[i])
 		
@@ -389,10 +436,65 @@ class Domain(object):
 
 		self.packplane(wing,spar,M,W,n,f,L)
 		
-		
+	def solver(self,convergence) :
+	#######################################################################
+	#####                                                             #####
+	#####                      Solver Function   	                  #####
+	#####                                                             #####
+	#######################################################################
+	#solver function runs through the algorithm until a solution converges
+	#----------------------------------------------------------------------
+	#inputs:
+	#	-plane=data structure containing problem scenario
+	#	-convergence=convergence criterion. Iterations will continue until 
+	#	             the error in structural weight is below convergence 
+	#outputs:
+	#	-plane=data structure containing problem scenario
+	#----------------------------------------------------------------------
+		W_S=self.wing.loading
+		error=1.0
+		while error>convergence :
+			
+			if (self.W.r_type=='ratio'):
+				self.W.r=self.W.R_n*self.W.tot
+			self.wing.S=self.W.tot/W_S	
+			self.geom()
+			
+			
+			prev=self.W.s
+				
+			#Step (2) [3 new]
+			self.bending_moment()
+			
+			#Step (4)
+			self.structure()
+			
+			#Step (4b)
+			self.nonstructure()
+			curr=self.W.s
+			
+			#error=error+1
+			if (prev==0.0):
+				error=1.0
+			else:
+				error=np.absolute(((curr-prev)/prev)*100)
+				
+			#Step (1) [2 new]
+			self.W.tot=self.W.s+self.W.n
+
+		#Total Weight Eq. (4)
+		self.W.tot=self.W.s+self.W.n
+
+		#Induced Drag Eq. (3)
+		Bsum=0.0
+		for i in range (0,len(self.L.B)) :
+				Bsum=Bsum+(i+2)*self.L.B[i]**2
+		self.D_i=(2.0*(self.W.tot/self.wing.b)**2)/(ma.pi*self.f.rho*self.f.V**2)*(1.0+Bsum)
+	
+			
 	#Holds the wing geometry information
 	class Wing(object):
-		_slots_=['S','b','c','c_type','t_c','t_c_type','t_max','m','z','theta','loading']
+		_slots_=['S','b','c','c_type','t_c','t_c_type','t_max','m','z','theta','loading','taper_ratio','root_tc','tip_tc']
 		
 		def set_t_c(self) :
 			#######################################################################
@@ -411,8 +513,12 @@ class Domain(object):
 			#		 section
 			#	-t_c_type=either 'function' or 'file'
 			#----------------------------------------------------------------------
-			if (self.t_c_type=='function'):
-				self.t_c=df.t_c(self.m)	
+			if ((self.t_c_type=='root/tip') or (self.t_c_type=='custom')):
+				df.t_c(self)
+			
+			#If height is specified in a file, scale the height
+			elif ((self.t_c_type=='constant') or (self.t_c_type=='file')):
+				self.t_c=self.t_c
 
 		def wing_area(self) :
 			#######################################################################
@@ -428,13 +534,11 @@ class Domain(object):
 			#	-S=wing area determined from chord distribution
 			#----------------------------------------------------------------------
 			#Integrate chord in theta using simpson's rule
-			ft=np.zeros((self.m+1,), dtype=np.float64)
+			ft=np.zeros((self.m+1,), dtype=np.float128)
 			for i in range (0,self.m+1):
 				ft[i]=self.c[i]*ma.sin(self.theta[i])
 				
-			self.S=-self.b*0.5*ints.simpson_third(0,self.m,self.theta,ft)
-
-			return S
+			self.S=-self.b*ints.simpson_third(0,self.m,self.theta,ft)
 			
 		def set_wing_geom(self):
 			#######################################################################
@@ -451,6 +555,8 @@ class Domain(object):
 			#----------------------------------------------------------------------
 
 			self.set_chord()
+			
+			self.wing_area()
 			
 			self.set_t_c()
 
@@ -496,15 +602,18 @@ class Domain(object):
 			#If chord is specified in function, use the function to find the 
 			#new chord to maintain constant wing area
 			
-			if (self.c_type=='function'):
-				self.c=df.chord(self)	
+			if ((self.c_type=='rectangular') or (self.c_type=='taper') or (self.c_type=='elliptic') or (self.c_type=='custom')):
+				df.chord(self)
 			
-					
+			#If height is specified in a file, scale the height
+			elif ((self.c_type=='constant') or (self.c_type=='file')):
+				self.c=self.c
+							
 	#Holds the spar geometry information	
 	class Spar(object):
-		_slots_=['sigma_max','h','h_type','gam','C_sigma','S_b','beam_type','inner_width','inner_height','outer_width','flange_height','flange_width','web_width']
+		_slots_=['sigma_max','h','h_type','fill_ratio','gam','C_sigma','S_b','beam_type','inner_width','inner_height','outer_width','flange_height','flange_width','web_width']
 
-		def init_beam(self,data):
+		def init_beam(self,data,comment_flag):
 			#######################################################################
 			#####                                                             #####
 			#####                   init_beam Function                        #####
@@ -520,14 +629,18 @@ class Domain(object):
 			#outputs:
 			#	-
 			#----------------------------------------------------------------------
+			if (self.beam_type != 'C_sigma'):self.h,self.h_type=distributions_init(data,'spar','height',comment_flag)
+			
+			if (self.h_type=='fill'):
+				self.fill_ratio = data["spar"]["height"]["function"]["fill"]
 			if (self.beam_type=='box'):
-				self.inner_height=data["spar"]["inner_height"]
-				self.inner_width=data["spar"]["inner_width"]
-				self.outer_width=data["spar"]["outer_width"]
+				self.inner_height=data["spar"]["beam_type"]["box"]["inner_height"]
+				self.inner_width=data["spar"]["beam_type"]["box"]["inner_width"]
+				self.outer_width=data["spar"]["beam_type"]["box"]["outer_width"]
 			elif (self.beam_type=='I'):
-				self.flange_height=data["spar"]["flange_height"]
-				self.web_width=data["spar"]["web_width"]
-				self.flange_width=data["spar"]["flange_width"]	
+				self.flange_height=data["spar"]["beam_type"]["I"]["flange_height"]
+				self.web_width=data["spar"]["beam_type"]["I"]["web_width"]
+				self.flange_width=data["spar"]["beam_type"]["I"]["flange_width"]	
 
 		def set_spar_geom(self,wing):
 			#######################################################################
@@ -554,7 +667,10 @@ class Domain(object):
 				self.box_beam(wing)
 			elif (self.beam_type == 'I'):
 				self.I_beam(wing)
-				
+			elif (self.beam_type == 'C_sigma'):
+				self.C_sigma=self.C_sigma
+			else:
+				print('WARNING: Spar beam not fully specified')	
 			#Calculate proportionality Constant Eq. (15)
 			for i in range (0,wing.m+1):
 				if (wing.c[i]==0):
@@ -576,14 +692,13 @@ class Domain(object):
 			#outputs:
 			#	-C_sigma=array of shape factors at each spanwise section
 			#----------------------------------------------------------------------
-			self.C_sigma=np.zeros((wing.m+1,), dtype=np.float64)
+			self.C_sigma=np.zeros((wing.m+1,), dtype=np.float128)
 			#Shape factor for rectangular beam Eq. (14)
 			for i in range (0,wing.m+1):
 				if (wing.c[i]==0):
 					self.C_sigma[i]=0.0
 				else:
-					#self.C_sigma[i]=(self.h[i]/wing.t_max[i])/6.0
-					self.C_sigma[i]=0.165
+					self.C_sigma[i]=(self.h[i]/wing.t_max[i])/6.0
 			
 		def box_beam(self,wing) :
 			#######################################################################
@@ -600,10 +715,10 @@ class Domain(object):
 			#outputs:
 			#	-C_sigma=array of shape factors at each spanwise section
 			#----------------------------------------------------------------------
-			C_sigma=np.zeros((wing.m+1,), dtype=np.float64)
-			h_i=np.zeros((wing.m+1,), dtype=np.float64)
-			w_i=np.zeros((wing.m+1,), dtype=np.float64)
-			w=np.zeros((wing.m+1,), dtype=np.float64)
+			C_sigma=np.zeros((wing.m+1,), dtype=np.float128)
+			h_i=np.zeros((wing.m+1,), dtype=np.float128)
+			w_i=np.zeros((wing.m+1,), dtype=np.float128)
+			w=np.zeros((wing.m+1,), dtype=np.float128)
 			#Set beam dimensions to values from input file (SCALE??)
 			h_i=self.inner_height#/self.h[wing.m/2])*self.h[i]
 			w_i=self.inner_width#*h_i[i]/self.h[wing.m/2])
@@ -633,11 +748,11 @@ class Domain(object):
 			#outputs:
 			#	-C_sigma=array of shape factors at each spanwise section
 			#----------------------------------------------------------------------
-			C_sigma=np.zeros((wing.m+1,), dtype=np.float64)
-			h_f=np.zeros((wing.m+1,), dtype=np.float64)
-			w_w=np.zeros((wing.m+1,), dtype=np.float64)
-			w=np.zeros((wing.m+1,), dtype=np.float64)
-			ratio=np.zeros((wing.m+1,), dtype=np.float64)
+			C_sigma=np.zeros((wing.m+1,), dtype=np.float128)
+			h_f=np.zeros((wing.m+1,), dtype=np.float128)
+			w_w=np.zeros((wing.m+1,), dtype=np.float128)
+			w=np.zeros((wing.m+1,), dtype=np.float128)
+			ratio=np.zeros((wing.m+1,), dtype=np.float128)
 			#Set beam dimensions to values from input file (SCALE??)
 			h_f=self.flange_height#*(self.h[i]/self.h[wing.m/2])
 			w_w=self.web_width#*(self.h[i]/self.h[wing.m/2])
@@ -672,15 +787,13 @@ class Domain(object):
 			#If height is specified in function, use the function to find the 
 			#new height
 			
-			if (self.h_type=='function'):
-				self.h=df.height(wing)
+			if ((self.h_type=='fill') or (self.h_type=='min_fill') or (self.h_type=='custom')):
+				df.height(self,wing)
 			
 			#If height is specified in a file, scale the height
-			else:
-				for i in range (0,wing.m+1):
-					self.h[i]=self.h[i]					
+			elif ((self.h_type=='constant') or (self.h_type=='file')):
+				self.h=self.h		
 
-									
 	#Holds the moment information	
 	class Moments(object):
 		_slots_=['bnm','bng','b']
@@ -750,104 +863,7 @@ class Domain(object):
 ########################################################################
 ########################################################################
 		
-def setup():
-#######################################################################
-#####                                                             #####
-#####                      Setup Function                         #####
-#####                                                             #####
-#######################################################################
-#setup function sets up the test case.
-#----------------------------------------------------------------------
-#inputs:
-#	-filename=file containing aircraft geometry
-#outputs:
-#	-plane=data structure containing initialized problem scenario
-#----------------------------------------------------------------------
-	#call function to setup data structure
-	plane=plane_setup()
-	
-
-	
-	return plane
-
-
-def solver(plane,convergence) :
-#######################################################################
-#####                                                             #####
-#####                      Solver Function   	                  #####
-#####                                                             #####
-#######################################################################
-#solver function runs through the algorithm until a solution converges
-#----------------------------------------------------------------------
-#inputs:
-#	-plane=data structure containing problem scenario
-#	-convergence=convergence criterion. Iterations will continue until 
-#	             the error in structural weight is below convergence 
-#outputs:
-#	-plane=data structure containing problem scenario
-#----------------------------------------------------------------------
-	W_S=plane.wing.loading
-	error=1.0
-	while error>convergence :
-		
-		if (plane.W.r_type=='ratio'):
-			plane.W.r=plane.W.R_n*plane.W.tot
-		plane.wing.S=plane.W.tot/W_S	
-		plane.geom()
-		
-		
-		prev=plane.W.s
-			
-		#Step (2) [3 new]
-		plane.bending_moment()
-		
-		#Step (4)
-		plane.structure()
-		
-		#Step (4b)
-		plane.nonstructure()
-		curr=plane.W.s
-		
-		#error=error+1
-		if (prev==0.0):
-			error=1.0
-		else:
-			error=np.absolute(((curr-prev)/prev)*100)
-			
-		#Step (1) [2 new]
-		plane.W.tot=plane.W.s+plane.W.n
-
-	#Total Weight Eq. (4)
-	plane.W.tot=plane.W.s+plane.W.n
-
-	#Induced Drag Eq. (3)
-	Bsum=0.0
-	for i in range (0,len(plane.L.B)) :
-			Bsum=Bsum+(i+2)*plane.L.B[i]**2
-	plane.D_i=(2.0*(plane.W.tot/plane.wing.b)**2)/(ma.pi*plane.f.rho*plane.f.V**2)*(1.0+Bsum)
-	return plane	
-
-
-def plane_setup(filename):
-#######################################################################
-#####                                                             #####
-#####                   plane_setup Function                      #####
-#####                                                             #####
-#######################################################################
-#plane_setup function creates an instance of the Domain class named plane
-#----------------------------------------------------------------------
-#inputs:
-#	-
-#outputs:
-#	-plane=data structure containing empty problem scenario
-#----------------------------------------------------------------------	
-	#Create problem scenario instance	
-	plane=Domain(filename)
-	
-	return plane
-	
-	
-def distributions_init(input_file,input_file_entry,n) :
+def distributions_init(data,category,distribution,comment_flag) :
 #######################################################################
 #####                                                             #####
 #####               distributions_init Function                   #####
@@ -865,69 +881,36 @@ def distributions_init(input_file,input_file_entry,n) :
 #	-init_var=array containing initialized distribution values
 #	-init_var_type=either 'function' or 'file'
 #----------------------------------------------------------------------
-	
-	#Check to see if distribution is specified from function or file
-	if (isinstance(input_file_entry,str)):
-		init_var=input_file_entry
+	n=data["wing"]["grid"]
+	comments="{0:<70}{1:<20}"
+	#Hirearchy=constant, function, file
+	if (comment_flag==1): print ('-----------------------------------------------------------------------------------------------------')
+	#Distribution from constant
+	if ('constant' in data[category][distribution]) :
+		init_var,init_var_type=set_constant_dist(data[category][distribution]["constant"],n)
+		if (comment_flag==1): print(comments.format(distribution+' initialized to spanwise-constant value:',str(data[category][distribution]["constant"])))
 		
-		#If from function, initialize distribution to zero and set type 
-		#to 'function'
-		if ((init_var=='function') or (init_var=='even')):
-			init_var_type=init_var
-			init_var=np.zeros((n+1,), dtype=np.float64)
-
-		#Anything else is interpreted as a file name containing the 
-		#distribution
-		else :
-			filename=init_var
-			init_var,init_var_type=file_dist(filename)
+	#Distribution from function
+	elif ('function' in data[category][distribution]) :
+		if isinstance(data[category][distribution]["function"],dict): 
+			for key in data[category][distribution]["function"]:
+				init_var_type=key
+		else: 
+			init_var_type=data[category][distribution]["function"]
 			
-	#If neither function nor file is specified, set distribution constant
-	#value and print notification
+		init_var=np.zeros((n+1,), dtype=np.float128)
+		if (comment_flag==1): print(comments.format('Setting '+distribution+' information from function:',init_var_type))
+		
+	#Distribution from File	
+	elif ('file' in data[category][distribution]) :
+		init_var,init_var_type=file_dist(data[category][distribution]["file"])
+		if (comment_flag==1): print(comments.format('Reading '+distribution+' information from file:',data[category][distribution]["file"]))
+		
+	#Default	
 	else:
-		init_var,init_var_type=constant_dists(input_file,input_file_entry,n)
-
-	return init_var,init_var_type
-
-
-def constant_dists(input_file,input_file_entry,n):
-#######################################################################
-#####                                                             #####
-#####                   constant_dists Function                   #####
-#####                                                             #####
-#######################################################################	
-#constant_dists sets all distributions specified by a constant in the
-#input file to that constant
-#----------------------------------------------------------------------
-#inputs:
-#	-input_file=input distribution file in ".json" format.
-#	-input_file_entry=constant value specified in the input distribution
-#	 file to which the distribution is to be set.
-#	-n=number of nodes along wing
-#outputs:
-#	-init_var=distribution now initialized to correct value
-#	-init_var_type=if file format is correct, return 'file'
-#----------------------------------------------------------------------
-
-	with open(input_file) as which_dist:
-		dist_data=json.load(which_dist,object_pairs_hook=OrderedDict)
+		if (comment_flag==1): print('WARNING: '+distribution+' defaulted to zero.')
+		init_var=np.zeros((n+1,), dtype=np.float128)
 		
-		if (input_file_entry==dist_data["wing"]["chord"]):
-			init_var,init_var_type=set_constant_dist(input_file_entry,n)
-			print('Chord distribution initialized to spanwise-constant value: 			'+str(input_file_entry))
-			
-		elif (input_file_entry==dist_data["wing"]["thickness_chord"]):
-			init_var,init_var_type=set_constant_dist(input_file_entry,n)
-			print('Thickness-to-chord ratio distribution initialized to spanwise-constant value:	'+str(input_file_entry))
-			
-		elif (input_file_entry==dist_data["weight"]["nonstructural_distribution"]):
-			init_var,init_var_type=set_constant_dist(input_file_entry,n)	
-			print('Non-structural weight initialized to spanwise-constant value:			'+str(input_file_entry))
-			
-		elif (input_file_entry==dist_data["spar"]["height"]):
-			init_var,init_var_type=set_constant_dist(input_file_entry,n)		
-			print('Spar height initialized to spanwise-constant value:				'+str(input_file_entry))	
-
 	return init_var,init_var_type
 	
 	
@@ -948,7 +931,7 @@ def set_constant_dist(input_file_entry,n):
 #	-init_var_type=if file format is correct, return 'file'
 #----------------------------------------------------------------------
 
-	init_var=np.zeros((n+1,), dtype=np.float64)
+	init_var=np.zeros((n+1,), dtype=np.float128)
 	for i in range (0,n+1):
 		init_var[i]=input_file_entry
 	init_var_type='constant'

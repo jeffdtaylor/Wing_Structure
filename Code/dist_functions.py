@@ -14,36 +14,32 @@ import user_functions as uf
 #####                                                             #####
 #######################################################################
 #W_n function sets up the non-sructural weight distribution	
-def nonstruct_dist(case) :
+def nonstruct_dist(plane) :
 	
 	#~ dist='even'
 	#~ dist='equation_30'
-	dist=case.W.ns_dist_type
+	dist=plane.W.ns_dist_type
 	
-	case.W.ntilde=np.zeros((case.wing.m+1,), dtype=np.float64)
-	
-	if (dist=='function') :
-		uf.Eq_30(case)
+	if (dist=='custom') :
+		uf.Wns(plane)
 	elif (dist=='even'):
-		for i in range (0,case.wing.m+1) :
+		for i in range (0,plane.wing.m+1) :
 			#Eq. (44)
-			if (case.W.n_type=='variable'):
-				case.W.n=case.W.tot-case.W.s#8.8
+			if (plane.W.n_type=='variable'):
+				plane.W.n=plane.W.tot-plane.W.s#8.8
 			sumodd=0.0
 			sumeven=0.0
 			k=1
-			while k < case.wing.m :
-				sumodd=sumodd+ma.sin(case.wing.theta[k])
+			while k < plane.wing.m :
+				sumodd=sumodd+ma.sin(plane.wing.theta[k])
 				k=k+2
 			
 			k=2
-			while k < case.wing.m :
-				sumeven=sumeven+ma.sin(case.wing.theta[k])
+			while k < plane.wing.m :
+				sumeven=sumeven+ma.sin(plane.wing.theta[k])
 				k=k+2
 			
-			case.W.ntilde[i]=-(3.0*np.real(case.wing.m)*(case.W.n-case.W.r))/(case.wing.b*(case.wing.theta[case.wing.m]-case.wing.theta[0])*(ma.sin(case.wing.theta[0])+4.0*sumodd+2.0*sumeven+ma.sin(case.wing.theta[case.wing.m])))
-			
-	return case.W.ntilde,case.W.n
+			plane.W.ntilde[i]=-(3.0*np.real(plane.wing.m)*(plane.W.n-plane.W.r))/(plane.wing.b*(plane.wing.theta[plane.wing.m]-plane.wing.theta[0])*(ma.sin(plane.wing.theta[0])+4.0*sumodd+2.0*sumeven+ma.sin(plane.wing.theta[plane.wing.m])))
 
 
 #######################################################################
@@ -51,14 +47,15 @@ def nonstruct_dist(case) :
 #####                       t_c Function                          #####
 #####                                                             #####
 #######################################################################
-#t_c function sets up the non-structural weight distribution	
-def t_c(n) :
-	
-	t_c=np.zeros((n+1,), dtype=np.float64)
-	for i in range(0,n+1) :
-		t_c[i]=0.12
-		
-	return t_c 
+#t_c function sets up the t/c distribution	
+def t_c(wing) :
+
+	if (wing.t_c_type == 'root/tip') :
+		for i in range (0,wing.m+1) :
+			wing.t_c[i]=wing.root_tc+2.0*(wing.tip_tc-wing.root_tc)/wing.b*wing.z[i]
+			
+	elif (wing.t_c_type == 'custom'):
+		uf.t_c(wing)
 
 
 #######################################################################
@@ -66,38 +63,29 @@ def t_c(n) :
 #####                       chord Function                        #####
 #####                                                             #####
 #######################################################################
-#chord function sets up the non-sructural weight distribution	
+#chord function sets up the chord distribution	
 def chord(wing) :
-	#~ wing_shape='taper'
-	#~ wing_shape='elliptic'
-	wing_shape='rectangular'
-	chord=np.zeros((wing.m+1,), dtype=np.float64)
+	
+	wing_shape=wing.c_type
+	
 	if (wing_shape=='taper') :
-		tr=0.7#(2.0*wing.S)/(wing.b*Cr)-1.0
-	
+		tr=wing.taper_ratio
 		Cr=(2.0*wing.S)/(wing.b*(1.0+tr))
-	
-		
-		for i in range(0,wing.m/2+1) :
-			chord[i]=tr*Cr+(2.0*Cr*(1.0-tr))/(wing.b)*(wing.z[i]+wing.b/2.0)
-		for i in range(0,wing.m/2+1) :
-			chord[wing.m-i]=chord[i]
+
+		for i in range(0,wing.m+1) :
+			wing.c[i]=Cr-((Cr-tr*Cr)/(wing.b/2.0))*wing.z[i]
 			
 	elif (wing_shape=='elliptic') :
 		Ra=wing.b**2/wing.S
-		for i in range(0,wing.m/2+1) :
-			chord[i]=4.0*wing.b/(ma.pi*Ra)*ma.sqrt(1-(2.0*(wing.z[i])/wing.b)**2)
-		for i in range(0,wing.m/2+1) :
-			chord[wing.m-i]=chord[i]
-			
+		for i in range(0,wing.m+1) :
+			wing.c[i]=4.0*wing.b/(ma.pi*Ra)*ma.sqrt(1-(2.0*(wing.z[i])/wing.b)**2)
+	
 	elif (wing_shape=='rectangular'):
 		for i in range(0,wing.m+1):
-			chord[i]=wing.S/wing.b
-			#chord[i]=0.22
-	#~ for i in range (0,wing.m+1):
-		#~ print wing.z[i],chord[i],','
-	#~ print ' '
-	return chord
+			wing.c[i]=wing.S/wing.b
+			
+	elif (wing_shape=='custom'):
+		uf.chord(wing)
 
 
 #######################################################################
@@ -106,9 +94,18 @@ def chord(wing) :
 #####                                                             #####
 #######################################################################
 #chord function sets up the spar height distribution
-def height(wing) :
-	h=np.zeros((wing.m+1,), dtype=np.float64)
-	for i in range (0,wing.m+1):
-		h[i]=wing.t_max[i]
+def height(spar,wing) :
+	
+	if (spar.h_type == 'fill'):
+		for i in range (0,wing.m+1):
+			spar.h[i]=wing.t_max[i]*spar.fill_ratio
+			
+	elif (spar.h_type == 'min_fill'):
+		minval=np.min(wing.t_max)
+		for i in range (0,wing.m+1):
+			spar.h[i]=minval
+			
+	elif (spar.h_type == 'custom'):
+		uf.height(spar,wing)
+	
 
-	return h
